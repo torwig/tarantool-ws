@@ -1,8 +1,9 @@
 #!/usr/bin/env tarantool
-json = require('json')
+local log = require('log')
+local json = require('json')
 local netbox = require 'net.box'
-package.loaded["http.client"] = nil -- tarantool has a namespace clash
-local websocket = require "http.websocket"
+local websocket = require('websocket')
+local yaml = require('yaml')
 
 local symbolMap = {}
 symbolMap["BTCUSD"] = "BTC/USD"
@@ -11,32 +12,40 @@ symbolMap["XRPUSD"] = "XRP/USD"
 
 local conn = netbox.connect('127.0.0.1:3301')
 
-local ws = websocket.new_from_uri("wss://api-pub.bitfinex.com/ws/2")
-ws:connect()
-ws:send('{"event": "subscribe", "channel": "trades", "symbol": "btcusd"}')
+local ws, err = websocket.connect("wss://api-pub.bitfinex.com/ws/2", nil, {timeout=3})
+if not ws then 
+	log.info(err)
+	return
+end
 
-for data in ws:each() do
-	if data == nil then
-		break
-	end
+ws:write('{"event": "subscribe", "channel": "trades", "symbol": "btcusd"}')
 
-	local msg = json.decode(data)
+local packet = ws:read()
 
-	if msg[2] == 'te' then
-		local trade_data = msg[3]
+while packet ~= nil do
+	local msg = json.decode(packet.data)
+	
+	if msg ~= nil then
+        if msg[2] == 'te' then
+			local trade_data = msg[3]
+	
+			local trade = {}
+			trade.source = 'bitfinex'
+			trade.ts = 	trade_data[2]
+			trade.symbol = 'BTC/USD'
+			trade.qty = math.abs(trade_data[3])
+			trade.px = trade_data[4]
 
-		local trade = {}
-		trade.source = 'bitfinex'
-		trade.ts = 	trade_data[2]
-		trade.symbol = 'BTC/USD'
-		trade.qty = math.abs(trade_data[3])
-		trade.px = trade_data[4]
-
-		local res = conn:call('put_trade', {trade})
-		if res then
-			print('trade sent', res)
+			log.info(yaml.encode(trade))
+	
+			--local res = conn:call('put_trade', {trade})
+			--if res then
+			--	print('trade sent', res)
+			--end
 		end
 	end
+
+    packet = ws:read()
 end
 
 ws:close()
