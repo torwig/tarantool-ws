@@ -13,7 +13,7 @@ local conn = netbox.connect('127.0.0.1:3301')
 
 local ws = websocket.new_from_uri("wss://ws-feed.pro.coinbase.com")
 ws:connect()
-ws:send('{"type": "subscribe", "product_ids": ["bBTC-USD", "ETH-USD", "XRP-USD"], "channels": ["matches"]}')
+ws:send('{"type": "subscribe", "product_ids": ["BTC-USD", "ETH-USD", "XRP-USD"], "channels": ["matches"]}')
 
 for data in ws:each() do
 	if data == nil then
